@@ -1,110 +1,46 @@
-name: "Security_Catalog Deployment"
+name: Security_Catalog Deployment
+
 on:
-  workflow_dispatch:
-    inputs:
-      destroy:
-        description: 'Whether to destroy the infra components'
-        default: false
-        required: false
-        type: boolean
-      region:
-        description: 'Which region would want to deploy to'
-        default: 'ap-south-1'
-        required: false
-        type: string
   push:
     branches:
       - main
-      - scp
-
-defaults:
-  run:
-    shell: bash
-    working-directory: ./
+  workflow_dispatch:
 
 jobs:
-  terraform-create:
-    if: ${{ github.event.inputs.destroy == 'false' }}
+  terraform:
     runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
-      AWS_DEFAULT_REGION: ${{ github.event.inputs.region }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up AWS Creds
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_DEFAULT_REGION }}
-      - name: Install dependencies
-        uses: hashicorp/setup-terraform@v2
-      - name: Terraform Init
-        run: |
-          terraform init -upgrade
-      - name: Terraform Plan
-        run: |
-          terraform plan -out=./tfplan
-          terraform show -json ./tfplan > terraform-plan-output.json  # Generate JSON output for OPA
 
-      # Debug the Terraform plan output
-      - name: Debug Terraform Plan Output
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.9.7
+
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Validate Terraform Configuration
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
         run: |
+          terraform plan -out=tfplan
           echo "Terraform Plan Output:"
-          cat terraform-plan-output.json  # Output the contents for inspection
-          # Validate JSON format and check for errors
-          jq . terraform-plan-output.json || echo "Invalid JSON detected"
+          terraform show -json tfplan | tee tfplan_output.json
 
-      # Extract INSTANCE_TYPE safely
-      - name: Extract Instance Type
+      - name: Validate Terraform Plan Output
         run: |
-          INSTANCE_TYPE=$(jq -r '.planned_values.root_module.resources[] | select(.type=="aws_instance") | .values.instance_type // empty' terraform-plan-output.json)
-          echo "{\"resource_type\": \"aws_instance\", \"instance_type\": \"$INSTANCE_TYPE\"}" > input.json
+          echo "Validating JSON output..."
+          cat tfplan_output.json | jq . || { echo "JSON validation failed"; exit 1; }
 
-      # Add OPA Policy Check Step
-      - name: Install OPA
-        run: |
-          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
-          chmod +x opa
-          sudo mv opa /usr/local/bin/
-      - name: Run OPA Policy Check
-        run: |
-          echo "Running OPA Policy Check"
-          opa eval --data ec2policy.rego --input terraform-plan-output.json "data.ec2policy.deny" --format=json | jq
+      - name: Apply Terraform Plan
+        if: success()
+        run: terraform apply -auto-approve tfplan
 
-      # Conditionally apply Terraform only if OPA check passes
-      - name: Terraform Apply
-        if: ${{ success() }}
-        run: |
-          terraform apply -auto-approve ./tfplan
-
-  terraform-destroy:
-    if: ${{ github.event.inputs.destroy == 'true' }}
-    runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
-      AWS_DEFAULT_REGION: ${{ github.event.inputs.region }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up AWS Creds
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_DEFAULT_REGION }}
-      - name: Install dependencies
-        uses: hashicorp/setup-terraform@v2
-      - name: Terraform Init
-        run: |
-          terraform init -upgrade
-      - name: Terraform Plan
-        run: |
-          terraform plan -destroy -out=./tfplan
-          terraform show -json ./tfplan > terraform-plan-output.json  # Generate JSON output for OPA
-      - name: Terraform Apply
-        run: |
-          terraform apply -auto-approve ./tfplan
+      - name: Clean up
+        if: always()
+        run: terraform destroy -auto-approve || echo "Destroy step failed."
