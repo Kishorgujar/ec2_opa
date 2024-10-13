@@ -57,6 +57,7 @@ jobs:
       # Debug the Terraform plan output
       - name: Debug Terraform Plan Output
         run: |
+          echo "Terraform Plan Output:"
           cat terraform-plan-output.json
 
       # Extract Instance Type and prepare input for OPA
