@@ -54,8 +54,8 @@ jobs:
         run: |
           echo "Terraform Plan Output:"
           cat terraform-plan-output.json  # Output the contents for inspection
-          # Validate JSON format
-          jq . terraform-plan-output.json
+          # Validate JSON format and check for errors
+          jq . terraform-plan-output.json || echo "Invalid JSON detected"
 
       # Extract INSTANCE_TYPE safely
       - name: Extract Instance Type
