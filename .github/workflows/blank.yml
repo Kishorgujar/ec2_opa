@@ -1,4 +1,5 @@
 name: "Security_Catalog Deployment"
+
 on:
   workflow_dispatch:
     inputs:
@@ -16,10 +17,12 @@ on:
     branches:
       - main
       - scp
+
 defaults:
   run:
     shell: bash
     working-directory: ./
+
 jobs:
   terraform-create:
     if: ${{ github.event.inputs.destroy == 'false' }}
@@ -31,21 +34,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up AWS Creds
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
       - name: Install dependencies
         uses: hashicorp/setup-terraform@v2
+
       - name: Terraform Init
         run: |
           terraform init -upgrade
+
       - name: Terraform Plan
         run: |
           terraform plan -out=./tfplan
           terraform show -json ./tfplan > terraform-plan-output.json  # Generate JSON output for OPA
+
+      # Debug the Terraform plan output
+      - name: Debug Terraform Plan Output
+        run: |
+          cat terraform-plan-output.json
+
+      # Extract Instance Type and prepare input for OPA
+      - name: Prepare OPA Input
+        run: |
+          INSTANCE_TYPE=$(jq -r '.resource_changes[] | select(.type=="aws_instance") | .change.after.instance_type // empty' terraform-plan-output.json)
+          echo "{\"resource_type\": \"aws_instance\", \"instance_type\": \"$INSTANCE_TYPE\"}" > input.json
 
       # Add OPA Policy Check Step
       - name: Install OPA
@@ -53,12 +71,6 @@ jobs:
           curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
           chmod +x opa
           sudo mv opa /usr/local/bin/
-      
-      # Extract Instance Type and prepare input for OPA
-      - name: Prepare OPA Input
-        run: |
-          INSTANCE_TYPE=$(jq -r '.resource_changes[] | select(.type=="aws_instance") | .change.after.instance_type' terraform-plan-output.json)
-          echo "{\"resource_type\": \"aws_instance\", \"instance_type\": \"$INSTANCE_TYPE\"}" > input.json
 
       - name: Run OPA Policy Check
         run: |
@@ -81,21 +93,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up AWS Creds
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
       - name: Install dependencies
         uses: hashicorp/setup-terraform@v2
+
       - name: Terraform Init
         run: |
           terraform init -upgrade
+
       - name: Terraform Plan
         run: |
           terraform plan -destroy -out=./tfplan
           terraform show -json ./tfplan > terraform-plan-output.json  # Generate JSON output for OPA
+
       - name: Terraform Apply
         run: |
           terraform apply -auto-approve ./tfplan
