@@ -22,20 +22,6 @@ resource "aws_subnet" "main_subnet" {
   }
 }
 
-# EC2 Instance Resource
-resource "aws_instance" "main_instance" {
-  ami                         = "ami-0dee22c13ea7a9a67" # Example AMI (update to match your requirements)
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.main_subnet.id
-  associate_public_ip_address  = true
-  key_name                    = var.key_pair_name        # Key Pair name added here
-
-  tags = {
-    Name        = "MainInstance"
-    Environment = "DevOps"
-  }
-
-
 # Security Group Resource
 resource "aws_security_group" "main_sg" {
   vpc_id = aws_vpc.main_vpc.id
@@ -59,6 +45,21 @@ resource "aws_security_group" "main_sg" {
   }
 }
 
+# EC2 Instance Resource
+resource "aws_instance" "main_instance" {
+  ami                         = "ami-0dee22c13ea7a9a67" # Example AMI (update to match your requirements)
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.main_subnet.id
+  associate_public_ip_address  = true
+  key_name                    = var.key_pair_name        # Key Pair name added here
+  security_groups             = [aws_security_group.main_sg.name] # Corrected syntax
+
+  tags = {
+    Name        = "MainInstance"
+    Environment = "DevOps"
+  }
+}
+
 # Outputs
 output "instance_id" {
   value = aws_instance.main_instance.id
@@ -67,4 +68,3 @@ output "instance_id" {
 output "public_ip" {
   value = aws_instance.main_instance.public_ip
 }
-
