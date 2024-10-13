@@ -63,7 +63,7 @@ jobs:
       # Extract Instance Type and prepare input for OPA
       - name: Prepare OPA Input
         run: |
-          INSTANCE_TYPE=$(jq -r '.resource_changes[] | select(.type=="aws_instance") | .change.after.instance_type // empty' terraform-plan-output.json)
+          INSTANCE_TYPE=$(jq -r '.planned_values.root_module.resources[] | select(.type=="aws_instance") | .values.instance_type // empty' terraform-plan-output.json)
           echo "{\"resource_type\": \"aws_instance\", \"instance_type\": \"$INSTANCE_TYPE\"}" > input.json
 
       # Add OPA Policy Check Step
