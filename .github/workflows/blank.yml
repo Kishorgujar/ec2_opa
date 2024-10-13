@@ -1,4 +1,4 @@
-run-name: "Security_Catalog Deployment"
+name: "Security_Catalog Deployment"
 on:
   workflow_dispatch:
     inputs:
@@ -53,10 +53,17 @@ jobs:
           curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
           chmod +x opa
           sudo mv opa /usr/local/bin/
+      
+      # Extract Instance Type and prepare input for OPA
+      - name: Prepare OPA Input
+        run: |
+          INSTANCE_TYPE=$(jq -r '.resource_changes[] | select(.type=="aws_instance") | .change.after.instance_type' terraform-plan-output.json)
+          echo "{\"resource_type\": \"aws_instance\", \"instance_type\": \"$INSTANCE_TYPE\"}" > input.json
+
       - name: Run OPA Policy Check
         run: |
           echo "Running OPA Policy Check"
-          opa eval --data ec2policy.rego --input terraform-plan-output.json "data.ec2policy.deny" --format=json | jq
+          opa eval --data ec2policy.rego --input input.json "data.ec2policy.deny" --format=json | jq
 
       # Conditionally apply Terraform only if OPA check passes
       - name: Terraform Apply
