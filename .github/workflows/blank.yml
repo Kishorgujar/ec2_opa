@@ -45,6 +45,7 @@ jobs:
       - name: Terraform Plan
         run: |
           terraform plan -out=./tfplan
+          terraform show -json ./tfplan > terraform-plan-output.json  # Generate JSON output for OPA
 
       # Add OPA Policy Check Step
       - name: Install OPA
@@ -87,6 +88,7 @@ jobs:
       - name: Terraform Plan
         run: |
           terraform plan -destroy -out=./tfplan
+          terraform show -json ./tfplan > terraform-plan-output.json  # Generate JSON output for OPA
       - name: Terraform Apply
         run: |
           terraform apply -auto-approve ./tfplan
