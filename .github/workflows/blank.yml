@@ -53,7 +53,7 @@ jobs:
       - name: Debug Terraform Plan Output
         run: |
           echo "Terraform Plan Output:"
-          cat terraform-plan-output.json > terraform-plan-debug.json  # Save output for inspection
+          cat terraform-plan-output.json  # Output the contents for inspection
           # Validate JSON format
           jq . terraform-plan-output.json
 
