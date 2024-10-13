@@ -34,21 +34,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up AWS Creds
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
-
       - name: Install dependencies
         uses: hashicorp/setup-terraform@v2
-
       - name: Terraform Init
         run: |
           terraform init -upgrade
-
       - name: Terraform Plan
         run: |
           terraform plan -out=./tfplan
@@ -59,12 +55,8 @@ jobs:
         run: |
           echo "Terraform Plan Output:"
           cat terraform-plan-output.json
-
-      # Extract Instance Type and prepare input for OPA
-      - name: Prepare OPA Input
-        run: |
-          INSTANCE_TYPE=$(jq -r '.planned_values.root_module.resources[] | select(.type=="aws_instance") | .values.instance_type // empty' terraform-plan-output.json)
-          echo "{\"resource_type\": \"aws_instance\", \"instance_type\": \"$INSTANCE_TYPE\"}" > input.json
+          # Validate JSON format (optional, you can remove this if it takes too long)
+          jq empty terraform-plan-output.json
 
       # Add OPA Policy Check Step
       - name: Install OPA
@@ -72,11 +64,10 @@ jobs:
           curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
           chmod +x opa
           sudo mv opa /usr/local/bin/
-
       - name: Run OPA Policy Check
         run: |
           echo "Running OPA Policy Check"
-          opa eval --data ec2policy.rego --input input.json "data.ec2policy.deny" --format=json | jq
+          opa eval --data ec2policy.rego --input terraform-plan-output.json "data.ec2policy.deny" --format=json | jq
 
       # Conditionally apply Terraform only if OPA check passes
       - name: Terraform Apply
@@ -94,26 +85,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up AWS Creds
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
-
       - name: Install dependencies
         uses: hashicorp/setup-terraform@v2
-
       - name: Terraform Init
         run: |
           terraform init -upgrade
-
       - name: Terraform Plan
         run: |
           terraform plan -destroy -out=./tfplan
           terraform show -json ./tfplan > terraform-plan-output.json  # Generate JSON output for OPA
-
       - name: Terraform Apply
         run: |
           terraform apply -auto-approve ./tfplan
