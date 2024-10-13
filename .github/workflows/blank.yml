@@ -1,5 +1,4 @@
 name: "Security_Catalog Deployment"
-
 on:
   workflow_dispatch:
     inputs:
@@ -54,9 +53,15 @@ jobs:
       - name: Debug Terraform Plan Output
         run: |
           echo "Terraform Plan Output:"
-          cat terraform-plan-output.json
-          # Validate JSON format (optional, you can remove this if it takes too long)
-          jq empty terraform-plan-output.json
+          cat terraform-plan-output.json > terraform-plan-debug.json  # Save output for inspection
+          # Validate JSON format
+          jq . terraform-plan-output.json
+
+      # Extract INSTANCE_TYPE safely
+      - name: Extract Instance Type
+        run: |
+          INSTANCE_TYPE=$(jq -r '.planned_values.root_module.resources[] | select(.type=="aws_instance") | .values.instance_type // empty' terraform-plan-output.json)
+          echo "{\"resource_type\": \"aws_instance\", \"instance_type\": \"$INSTANCE_TYPE\"}" > input.json
 
       # Add OPA Policy Check Step
       - name: Install OPA
