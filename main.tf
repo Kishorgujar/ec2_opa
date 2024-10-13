@@ -52,12 +52,17 @@ resource "aws_instance" "main_instance" {
   subnet_id                   = aws_subnet.main_subnet.id
   associate_public_ip_address  = true
   key_name                    = var.key_pair_name        # Key Pair name added here
-  security_groups             = [aws_security_group.main_sg.name] # Corrected syntax
+  vpc_security_group_ids       = [aws_security_group.main_sg.id]  # Use SG ID instead of name
 
   tags = {
     Name        = "MainInstance"
     Environment = "DevOps"
   }
+
+  # Ensure the security group is fully created before launching the instance
+  depends_on = [
+    aws_security_group.main_sg
+  ]
 }
 
 # Outputs
